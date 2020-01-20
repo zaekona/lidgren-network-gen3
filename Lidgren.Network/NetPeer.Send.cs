@@ -126,18 +126,23 @@ namespace Lidgren.Network
 			int len = msg.GetEncodedSize();
 			if (len <= mtu)
 			{
-				Interlocked.Add(ref msg.m_recyclingCount, recipients.Count);
-				foreach (NetConnection conn in recipients)
-				{
-					if (conn == null)
-					{
-						Interlocked.Decrement(ref msg.m_recyclingCount);
-						continue;
-					}
-					NetSendResult res = conn.EnqueueMessage(msg, method, sequenceChannel);
-					if (res == NetSendResult.Dropped)
-						Interlocked.Decrement(ref msg.m_recyclingCount);
-				}
+                var recipientCount = recipients.Count;
+
+                Interlocked.Add(ref msg.m_recyclingCount, recipientCount);
+
+                for (var i = 0; i < recipientCount; i++)
+                {
+                    var conn = recipients[i];
+                    if (conn == null)
+                    {
+                        Interlocked.Decrement(ref msg.m_recyclingCount);
+                        continue;
+                    }
+                    NetSendResult res = conn.EnqueueMessage(msg, method, sequenceChannel);
+                    if (res == NetSendResult.Dropped)
+                        Interlocked.Decrement(ref msg.m_recyclingCount);
+
+                }
 			}
 			else
 			{

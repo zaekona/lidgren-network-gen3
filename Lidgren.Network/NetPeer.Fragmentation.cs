@@ -62,16 +62,19 @@ namespace Lidgren.Network
 				NetException.Assert(chunk.m_bitLength != 0);
 				NetException.Assert(chunk.GetEncodedSize() < mtu);
 
-				Interlocked.Add(ref chunk.m_recyclingCount, recipients.Count);
+                var recipientCount = recipients.Count;
 
-				foreach (NetConnection recipient in recipients)
-				{
-					var res = recipient.EnqueueMessage(chunk, method, sequenceChannel);
-					if (res == NetSendResult.Dropped)
-						Interlocked.Decrement(ref chunk.m_recyclingCount);
-					if ((int)res > (int)retval)
-						retval = res; // return "worst" result
-				}
+				Interlocked.Add(ref chunk.m_recyclingCount, recipientCount);
+
+                for (var j = 0; j < recipientCount; j++)
+                {
+                    var recipient = recipients[j];
+                    var res = recipient.EnqueueMessage(chunk, method, sequenceChannel);
+                    if (res == NetSendResult.Dropped)
+                        Interlocked.Decrement(ref chunk.m_recyclingCount);
+                    if ((int)res > (int)retval)
+                        retval = res; // return "worst" result
+                }
 
 				bitsLeft -= bitsPerChunk;
 			}

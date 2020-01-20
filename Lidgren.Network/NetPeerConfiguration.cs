@@ -481,7 +481,6 @@ namespace Lidgren.Network
 			set { m_expandMTUFailAttempts = value; }
 		}
 
-#if DEBUG
 		/// <summary>
 		/// Gets or sets the simulated amount of sent packets lost from 0.0f to 1.0f
 		/// </summary>
@@ -525,7 +524,6 @@ namespace Lidgren.Network
 			get { return m_duplicates; }
 			set { m_duplicates = value; }
 		}
-#endif
 
 		/// <summary>
 		/// Creates a memberwise shallow clone of this configuration
