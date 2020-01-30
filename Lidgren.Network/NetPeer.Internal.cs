@@ -22,6 +22,7 @@ namespace Lidgren.Network
 		internal NetIncomingMessage m_readHelperMessage;
 		private EndPoint m_senderRemote;
 		private object m_initializeLock = new object();
+		private object m_bindSocketLock = new object();
 		private uint m_frameCounter;
 		private double m_lastHeartbeat;
 		private double m_lastSocketBind = float.MinValue;
@@ -116,47 +117,38 @@ namespace Lidgren.Network
 			}
 			m_lastSocketBind = now;
 
-			using (var mutex = new Mutex(false, "Global\\lidgrenSocketBind"))
+			lock (m_bindSocketLock)
 			{
+				if (m_socket == null)
+					m_socket = new Socket(m_configuration.LocalAddress.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
+
+				if (reBind)
+					m_socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, (int)1);
+
+				m_socket.ReceiveBufferSize = m_configuration.ReceiveBufferSize;
+				m_socket.SendBufferSize = m_configuration.SendBufferSize;
+				m_socket.Blocking = false;
+
+                if(m_configuration.DualStack && m_configuration.LocalAddress.AddressFamily == AddressFamily.InterNetworkV6)
+                    m_socket.DualMode = true;
+
+                var localAddress = m_configuration.DualStack
+                    ? m_configuration.LocalAddress.MapToIPv6()
+                    : m_configuration.LocalAddress;
+
+                var ep = (EndPoint)new NetEndPoint(localAddress, reBind ? m_listenPort : m_configuration.Port);
+				m_socket.Bind(ep);
+
 				try
 				{
-					mutex.WaitOne();
-
-					if (m_socket == null)
-						m_socket = new Socket(m_configuration.LocalAddress.AddressFamily, SocketType.Dgram, ProtocolType.Udp);
-
-					if (reBind)
-						m_socket.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, (int)1);
-
-					m_socket.ReceiveBufferSize = m_configuration.ReceiveBufferSize;
-					m_socket.SendBufferSize = m_configuration.SendBufferSize;
-					m_socket.Blocking = false;
-
-                    if(m_configuration.DualStack && m_configuration.LocalAddress.AddressFamily == AddressFamily.InterNetworkV6)
-                        m_socket.DualMode = true;
-
-                    var localAddress = m_configuration.DualStack
-                        ? m_configuration.LocalAddress.MapToIPv6()
-                        : m_configuration.LocalAddress;
-
-                    var ep = (EndPoint)new NetEndPoint(localAddress, reBind ? m_listenPort : m_configuration.Port);
-					m_socket.Bind(ep);
-
-					try
-					{
-						const uint IOC_IN = 0x80000000;
-						const uint IOC_VENDOR = 0x18000000;
-						uint SIO_UDP_CONNRESET = IOC_IN | IOC_VENDOR | 12;
-						m_socket.IOControl((int)SIO_UDP_CONNRESET, new byte[] { Convert.ToByte(false) }, null);
-					}
-					catch
-					{
-						// ignore; SIO_UDP_CONNRESET not supported on this platform
-					}
+					const uint IOC_IN = 0x80000000;
+					const uint IOC_VENDOR = 0x18000000;
+					uint SIO_UDP_CONNRESET = IOC_IN | IOC_VENDOR | 12;
+					m_socket.IOControl((int)SIO_UDP_CONNRESET, new byte[] { Convert.ToByte(false) }, null);
 				}
-				finally
+				catch
 				{
-					mutex.ReleaseMutex();
+					// ignore; SIO_UDP_CONNRESET not supported on this platform
 				}
 			}
 
